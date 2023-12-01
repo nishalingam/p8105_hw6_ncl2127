@@ -1,0 +1,74 @@
+---
+title: "p8105_hw6_ncl2127"
+output: html_document
+date: "2023-11-27"
+---
+
+```{r}
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(broom)
+
+```
+
+Problem 2
+
+```{r}
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2022-01-01",
+    date_max = "2022-12-31") |>
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) |>
+  select(name, id, everything())
+```
+
+```{r}
+boot_straps = 
+  weather_df |>
+  modelr::bootstrap(n = 5000)|>
+  pull(strap) |>
+  nth(1) |>
+  as_tibble()
+  
+boot_strap_res = weather_df |>
+  modelr::bootstrap(n = 5000) |>
+  mutate(
+    models = map(strap, \(df) lm(tmax ~ tmin + prcp, data = df) ),
+    results = map(models, broom::tidy),
+    glance = map(models, broom::glance)) |> 
+  select(-strap, -models) |>
+  unnest(results)|>
+  janitor::clean_names()
+
+tmin_boot = boot_strap_res |> filter(term == "tmin")
+prcp_boot = boot_strap_res |> filter(term == "prcp")
+
+boot_strap_log = log(tmin_boot$estimate*prcp_boot$estimate)|> as_tibble()|> rowid_to_column(var = "id") |> drop_na()
+
+r_squared_boot = boot_strap_res |> select(id, glance) |> unnest(glance)|>janitor::clean_names()|> distinct(id, .keep_all = TRUE)
+
+log_plot = ggplot(boot_strap_log, aes(x = value)) +
+  geom_density()
+
+r_sq_plot = ggplot(r_squared_boot, aes(x = r_squared)) + 
+  geom_density()
+
+log_plot
+
+r_sq_plot
+ 
+```
+### Comments on log(beta_1 * beta_2) and r r^2 plots:
+
+
+
+Problem 3
+
