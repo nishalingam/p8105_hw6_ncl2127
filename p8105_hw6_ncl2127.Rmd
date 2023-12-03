@@ -1,6 +1,6 @@
 ---
 title: "p8105_hw6_ncl2127"
-output: html_document
+output: github_document
 date: "2023-11-27"
 ---
 
@@ -83,11 +83,9 @@ conf_int_rsq <- r_squared_boot |>
     ci_upper = quantile(r_squared, 0.975))
  
 ```
-The `r log(\beta_{1}*\beta_{2}` plot shows a moderately left-skewed distribution. The r-squared plot shows a relatively left-skewed distribution as well, however it seems to be less skewed than the log plot. Both distributions follow a normal distribution somewhat closely, but not exactly due to their skewness. We are 95% confident that the true `r log(\beta_{1}*\beta_{2}` value lies between the interval of `r (conf_int_log$ci_lower, conf_int_log$ci_upper)`. We are 95% confident that the true r-squared value lies between the interval of `r (conf_int_rsq$ci_lower, conf_int_rsq$ci_upper)`.
+The $log(\beta_{1}*\beta_{2})$ plot shows a moderately left-skewed distribution. The r-squared plot shows a relatively left-skewed distribution as well, however it seems to be less skewed than the log plot. Both distributions follow a normal distribution somewhat closely, but not exactly due to their skewness. We are 95% confident that the true $log(\beta_{1}*\beta_{2})$ value lies between the interval of (`r conf_int_log$ci_lower`, `r conf_int_log$ci_upper`). We are 95% confident that the true r-squared value lies between the interval of (`r conf_int_rsq$ci_lower`, `r conf_int_rsq$ci_upper`).
 
 Problem 3
-
-- load and clean data for regression analysis (i.e. convert numeric to factor where appropriate, check for missing data, etc.)
 
 ## Dataset cleaning
 ```{r}
@@ -184,4 +182,4 @@ cv_df |>
   mutate(model = fct_inorder(model)) |> 
   ggplot(aes(x = model, y = rmse)) + geom_violin()
 ```
-Based on the cross-validation plot, it seems that the given model using the length at birth and gestation age and the given model using head circumference, length at birth, and gestational age had slightly reduced RMSEs compared to the hypothesized model I created using gestational age, head circumference, and mother's weight at delivery.
+Based on the cross-validation plot, it seems that the given model using the length at birth and gestation age and the given model using head circumference, length at birth, and gestational age had a wider, slightly reduced and significantly lower RMSEs, respectively, compared to the hypothesized model I created using gestational age, head circumference, and mother's weight at delivery. The head circumference, length at birth, and gestational age model is likely the best model of the three to predict birthweight.
