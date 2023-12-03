@@ -11,6 +11,9 @@ library(dplyr)
 library(stringr)
 library(ggplot2)
 library(broom)
+library(purrr)
+library(modelr)
+library(mgcv)
 
 ```
 
@@ -55,11 +58,11 @@ boot_strap_res = weather_df |>
 tmin_boot = boot_strap_res |> filter(term == "tmin")
 prcp_boot = boot_strap_res |> filter(term == "prcp")
 
-boot_strap_log = log(tmin_boot$estimate*prcp_boot$estimate)|> as_tibble()|> rowid_to_column(var = "id") |> drop_na()
+boot_strap_log = log(tmin_boot$estimate*prcp_boot$estimate)|> as_tibble()|> rowid_to_column(var = "id") |> drop_na() |> rename(logB1_B2 = value)
 
 r_squared_boot = boot_strap_res |> select(id, glance) |> unnest(glance)|>janitor::clean_names()|> distinct(id, .keep_all = TRUE)
 
-log_plot = ggplot(boot_strap_log, aes(x = value)) +
+log_plot = ggplot(boot_strap_log, aes(x = logB1_B2)) +
   geom_density()
 
 r_sq_plot = ggplot(r_squared_boot, aes(x = r_squared)) + 
@@ -71,8 +74,8 @@ r_sq_plot
 
 conf_int_log <- boot_strap_log |>
   summarize(
-    ci_lower = quantile(value, 0.025), 
-    ci_upper = quantile(value, 0.975))
+    ci_lower = quantile(logB1_B2, 0.025), 
+    ci_upper = quantile(logB1_B2, 0.975))
 
 conf_int_rsq <- r_squared_boot |>
   summarize(
@@ -80,8 +83,7 @@ conf_int_rsq <- r_squared_boot |>
     ci_upper = quantile(r_squared, 0.975))
  
 ```
-### Comments on log(beta_1 * beta_2) and r r^2 plots + conf intervals:
-
+The `r log(\beta_{1}*\beta_{2}` plot shows a moderately left-skewed distribution. The r-squared plot shows a relatively left-skewed distribution as well, however it seems to be less skewed than the log plot. Both distributions follow a normal distribution somewhat closely, but not exactly due to their skewness. We are 95% confident that the true `r log(\beta_{1}*\beta_{2}` value lies between the interval of `r (conf_int_log$ci_lower, conf_int_log$ci_upper)`. We are 95% confident that the true r-squared value lies between the interval of `r (conf_int_rsq$ci_lower, conf_int_rsq$ci_upper)`.
 
 Problem 3
 
@@ -103,36 +105,13 @@ bw_df <- bw_df |> mutate(babysex = fct_recode(babysex, male = "1", female = "2")
 
 ```
 
-- propose a regression model for birthweight (hypothesized structure for the factors that underly birthweight, on a data-driven model-building process, or a combination of the two)
-    - describe modeling process
-    
-- show a plot of model residuals against fitted values; use add_predictions and add_residuals in making this plot
-    
 ## Regression model
 ```{r}
-# bw_df |> ggplot(aes(x = menarche, y = bwt)) + geom_point()
-# bw_df |> ggplot(aes(x = mheight, y = bwt)) + geom_point()
-# bw_df |> ggplot(aes(x = momage, y = bwt)) + geom_point()
-# 
-# ## potential
-# bw_df |> ggplot(aes(x = smoken, y = bwt)) + geom_point()
-# bw_df |> ggplot(aes(x = fincome, y = bwt)) + geom_point()
-# bw_df |> ggplot(aes(x = babysex, y = bwt)) + geom_point()
-# 
-# bw_df |> ggplot(aes(x = delwt, y = bwt)) + geom_point()
-# bw_df |> ggplot(aes(x = ppbmi, y = bwt)) + geom_point()
-# bw_df |> ggplot(aes(x = ppwt, y = bwt)) + geom_point()
-# bw_df |> ggplot(aes(x = wtgain, y = bwt)) + geom_point()
-# bw_df |> ggplot(aes(x = malform, y = bwt)) + geom_point()
-
-
 bw_df |> ggplot(aes(x = bhead, y = bwt)) + geom_point()
 bw_df |> ggplot(aes(x = blength, y = bwt)) + geom_point()
 bw_df |> ggplot(aes(x = gaweeks, y = bwt)) + geom_point()
 
 my_model_1 = lm(bwt ~ gaweeks + delwt + bhead, data = bw_df)
-
-# summary(my_model_1)
 
 gaweeks_resid = bw_df |>
   modelr::add_residuals(my_model_1) |>
@@ -166,24 +145,43 @@ bhead_predict
 delwt_predict
 gaweeks_predict
 ```
-Models to be compared with my hypothesized model
+
+I created this model based on a hypothesized structure for the factors underlying birthweight by viewing the plotted relationship between each factor and birthweight. I noticed that gestational age, head circumference at birth, and length at birth were seemed to have a stronger positive_____ correlation with birthweight. I additionally chose mother's weight at delivery as a third and final variable  in my MLR model due to the genetic component involved in determining the baby's birth weight (which of course is impacted by the father's weight as well, however in this case we are only provided the mother's delivery weight information).
+
+
 ```{r}
 blength_gaweeks = lm(bwt ~ gaweeks + blength, data = bw_df)
 
-head_length_ga = lm(bwt ~ gaweeks*delwt + delwt*bhead + gaweeks*bhead + gaweeks*delwt*bhead, data = bw_df)
+bhead_blength_ga = lm(bwt ~ gaweeks*blength + blength*bhead + gaweeks*bhead + gaweeks*blength*bhead, data = bw_df)
 
+cv_df =
+  crossv_mc(bw_df, nrow(bw_df))
 
+cv_df =
+  cv_df |> 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble))
+  
+cv_df = 
+  cv_df |> 
+  mutate(
+    my_model_1  = map(train, \(df) lm(bwt ~ gaweeks + delwt + bhead, data = df)),
+    blength_gaweeks  = map(train, \(df) lm(bwt ~ gaweeks + blength, data = df)),
+    bhead_blength_ga  = map(train, \(df) lm(bwt ~ gaweeks*blength + blength*bhead + gaweeks*bhead + gaweeks*blength*bhead, data = df))) |> 
+  mutate(
+    rmse_my_model_1 = map2_dbl(my_model_1, test, \(mod, df) rmse(model = mod, data = df)),
+    rmse_blength_gaweeks = map2_dbl(blength_gaweeks, test, \(mod, df) rmse(model = mod, data = df)),
+    rmse_bhead_blength_ga = map2_dbl(bhead_blength_ga, test, \(mod, df) rmse(model = mod, data = df)))
+
+cv_df |> 
+  select(starts_with("rmse")) |> 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") |> 
+  mutate(model = fct_inorder(model)) |> 
+  ggplot(aes(x = model, y = rmse)) + geom_violin()
 ```
-
-
-## I created this model based on a hypothesized structure for the factors underlying birthweight
-
-Cross validated prediction error comparison
-```{r}
-
-
-```
-- compare your model to two others in terms of the cross-validated prediction error; use crossv_mc and functions in purrr as appropriate: 
-    - two models to compare to: 
-        - One using length at birth and gestational age as                   predictors (main effects only)
-        - One using head circumference, length, sex, and all                 interactions (including the three-way interaction)                 between these
+Based on the cross-validation plot, it seems that the given model using the length at birth and gestation age and the given model using head circumference, length at birth, and gestational age had slightly reduced RMSEs compared to the hypothesized model I created using gestational age, head circumference, and mother's weight at delivery.
