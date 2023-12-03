@@ -48,6 +48,10 @@ boot_strap_res = weather_df |>
   unnest(results)|>
   janitor::clean_names()
 
+```
+
+```{r}
+
 tmin_boot = boot_strap_res |> filter(term == "tmin")
 prcp_boot = boot_strap_res |> filter(term == "prcp")
 
@@ -64,11 +68,122 @@ r_sq_plot = ggplot(r_squared_boot, aes(x = r_squared)) +
 log_plot
 
 r_sq_plot
+
+conf_int_log <- boot_strap_log |>
+  summarize(
+    ci_lower = quantile(value, 0.025), 
+    ci_upper = quantile(value, 0.975))
+
+conf_int_rsq <- r_squared_boot |>
+  summarize(
+    ci_lower = quantile(r_squared, 0.025), 
+    ci_upper = quantile(r_squared, 0.975))
  
 ```
-### Comments on log(beta_1 * beta_2) and r r^2 plots:
-
+### Comments on log(beta_1 * beta_2) and r r^2 plots + conf intervals:
 
 
 Problem 3
 
+- load and clean data for regression analysis (i.e. convert numeric to factor where appropriate, check for missing data, etc.)
+
+## Dataset cleaning
+```{r}
+bw_df = read_csv("data/birthweight.csv") |>
+  drop_na()
+
+bw_df$babysex <- factor(bw_df$babysex, levels = c("1", "2"))
+bw_df$frace <- factor(bw_df$frace, levels = c("1", "2", "3", "4", "8", "9"))
+bw_df$malform <- factor(bw_df$malform, levels = c("0", "1"))
+bw_df$mrace <- factor(bw_df$mrace, levels = c("1", "2", "3", "4", "8"))
+
+bw_df <- bw_df |> mutate(babysex = fct_recode(babysex, male = "1", female = "2")) |> mutate(frace = fct_recode(frace, white = "1", black = "2", asian = "3", puerto_rican = "4", other = "8", unknown = "9")) |>
+  mutate(malform = fct_recode(malform, absent = "0", present = "1")) |>
+  mutate(mrace = fct_recode(mrace, white = "1", black = "2", asian = "3", puerto_rican = "4", other = "8"))
+
+```
+
+- propose a regression model for birthweight (hypothesized structure for the factors that underly birthweight, on a data-driven model-building process, or a combination of the two)
+    - describe modeling process
+    
+- show a plot of model residuals against fitted values; use add_predictions and add_residuals in making this plot
+    
+## Regression model
+```{r}
+# bw_df |> ggplot(aes(x = menarche, y = bwt)) + geom_point()
+# bw_df |> ggplot(aes(x = mheight, y = bwt)) + geom_point()
+# bw_df |> ggplot(aes(x = momage, y = bwt)) + geom_point()
+# 
+# ## potential
+# bw_df |> ggplot(aes(x = smoken, y = bwt)) + geom_point()
+# bw_df |> ggplot(aes(x = fincome, y = bwt)) + geom_point()
+# bw_df |> ggplot(aes(x = babysex, y = bwt)) + geom_point()
+# 
+# bw_df |> ggplot(aes(x = delwt, y = bwt)) + geom_point()
+# bw_df |> ggplot(aes(x = ppbmi, y = bwt)) + geom_point()
+# bw_df |> ggplot(aes(x = ppwt, y = bwt)) + geom_point()
+# bw_df |> ggplot(aes(x = wtgain, y = bwt)) + geom_point()
+# bw_df |> ggplot(aes(x = malform, y = bwt)) + geom_point()
+
+
+bw_df |> ggplot(aes(x = bhead, y = bwt)) + geom_point()
+bw_df |> ggplot(aes(x = blength, y = bwt)) + geom_point()
+bw_df |> ggplot(aes(x = gaweeks, y = bwt)) + geom_point()
+
+my_model_1 = lm(bwt ~ gaweeks + delwt + bhead, data = bw_df)
+
+# summary(my_model_1)
+
+gaweeks_resid = bw_df |>
+  modelr::add_residuals(my_model_1) |>
+  ggplot(aes(x = gaweeks, y = resid)) +geom_point()
+
+delwt_resid = bw_df |>
+  modelr::add_residuals(my_model_1) |>
+  ggplot(aes(x = delwt, y = resid)) +geom_point()
+
+bhead_resid = bw_df |>
+  modelr::add_residuals(my_model_1) |>
+  ggplot(aes(x = bhead, y = resid)) + geom_point()
+
+gaweeks_resid
+delwt_resid
+bhead_resid
+
+gaweeks_predict = bw_df |>
+  modelr::add_predictions(my_model_1) |>
+  ggplot(aes(x = gaweeks, y = pred)) + geom_point()
+
+delwt_predict = bw_df |>
+  modelr::add_predictions(my_model_1) |>
+  ggplot(aes(x = delwt, y = pred)) + geom_point()
+
+bhead_predict = bw_df |>
+  modelr::add_predictions(my_model_1) |>
+  ggplot(aes(x = bhead, y = pred)) + geom_point()
+
+bhead_predict
+delwt_predict
+gaweeks_predict
+```
+Models to be compared with my hypothesized model
+```{r}
+blength_gaweeks = lm(bwt ~ gaweeks + blength, data = bw_df)
+
+head_length_ga = lm(bwt ~ gaweeks*delwt + delwt*bhead + gaweeks*bhead + gaweeks*delwt*bhead, data = bw_df)
+
+
+```
+
+
+## I created this model based on a hypothesized structure for the factors underlying birthweight
+
+Cross validated prediction error comparison
+```{r}
+
+
+```
+- compare your model to two others in terms of the cross-validated prediction error; use crossv_mc and functions in purrr as appropriate: 
+    - two models to compare to: 
+        - One using length at birth and gestational age as                   predictors (main effects only)
+        - One using head circumference, length, sex, and all                 interactions (including the three-way interaction)                 between these
